@@ -1,0 +1,8 @@
+---
+description: Enforces specific naming conventions for React and TypeScript code to maintain consistency.
+globs: **/*.{ts,tsx,js,jsx}
+alwaysApply: false
+---
+- Следвайте стандартните конвенции за именуване на TypeScript и JavaScript за променливи, функции и компоненти.
+- Имената на компонентите трябва да са PascalCase.
+- Имената на променливите и функциите трябва да са CamelCase.
