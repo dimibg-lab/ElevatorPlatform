@@ -1,12 +1,23 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { notify } from './Notifications';
 import { useEffect } from 'react';
 
 const EmailVerification = () => {
+  const location = useLocation();
+  const fromRegistration = location.state?.fromRegistration;
+  const fromResend = location.state?.fromResend;
+
   useEffect(() => {
-    // Показваме нотификация при зареждане на компонента
-    notify.info('Изпратен е имейл за потвърждение!');
-  }, []);
+    // Показваме подходяща нотификация според произхода
+    if (fromRegistration) {
+      notify.success('Успешна регистрация! Моля, проверете имейла си за потвърждение.');
+    } else if (fromResend) {
+      notify.success('Изпратен е нов имейл за потвърждение');
+    } else {
+      // Показваме по-обща нотификация, ако не идваме от регистрация или повторно изпращане
+      notify.info('Изпратен е имейл за потвърждение!');
+    }
+  }, [fromRegistration, fromResend]);
 
   return (
     <div className="max-w-md mx-auto mt-10 text-center">

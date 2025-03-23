@@ -3,7 +3,16 @@ description: Specific guidelines for TypeScript usage, including strict typing a
 globs: **/*.{ts,tsx}
 alwaysApply: false
 ---
-- Използвайте функциите на TypeScript, за да осигурите безопасност на типа.
-- Предпочитайте интерфейсите пред типовете, когато дефинирате форми на обекти.
-- Използвайте генерични продукти за създаване на многократно използвани компоненти и функции.
-- Налагайте стриктно въвеждане и избягвайте "всеки" тип, доколкото е възможно.
+# Използване на TypeScript
+
+## Типизация
+- Включете строги TypeScript настройки в `tsconfig.json`:
+  ```json
+  {
+    "compilerOptions": {
+      "strict": true,
+      "noImplicitAny": true,
+      "strictNullChecks": true,
+      "strictFunctionTypes": true
+    }
+  }

@@ -1,11 +1,12 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { notify } from './Notifications';
 import { resendVerificationSchema, type ResendVerificationFormData } from '../schemas/resendVerificationSchema';
 
 const ResendVerification = () => {
+  const navigate = useNavigate();
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<ResendVerificationFormData>({
     resolver: zodResolver(resendVerificationSchema),
     defaultValues: {
@@ -22,7 +23,7 @@ const ResendVerification = () => {
 
       if (error) throw error;
 
-      notify.success('Изпратен е нов имейл за потвърждение');
+      navigate('/email-verification', { state: { fromResend: true } });
     } catch (error) {
       console.error('Error resending verification:', error);
       notify.error(error instanceof Error ? error.message : 'Грешка при изпращане на имейл');
