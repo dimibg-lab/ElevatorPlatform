@@ -5,7 +5,7 @@ import { notify } from './Notifications';
 import { supabase } from '../supabaseClient';
 import { loginSchema, type LoginFormData } from '../schemas/loginSchema';
 import { useState, useEffect } from 'react';
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -35,14 +35,14 @@ const Login = () => {
   const onSubmit = async (data: LoginFormData) => {
     try {
       setIsLoading(true);
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
 
       if (error) throw error;
 
-      notify.success('Успешен вход!');
+      notify.success('Успешен вход в системата!');
       
       // Пренасочване към таблото
       navigate('/dashboard');

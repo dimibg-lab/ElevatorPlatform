@@ -1,64 +1,43 @@
 "use client"
 
-import { type ReactNode, useContext, useState, useEffect } from "react"
+import { type ReactNode, useContext, useState, useEffect, useRef } from "react"
 import { Link, useNavigate, useLocation } from "react-router-dom"
 import { ThemeContext } from "../../App"
-import { supabase } from "../../supabaseClient"
-import { notify } from "../Notifications"
+import { useAuth } from "../../context/AuthContext"
+import { toast } from "react-toastify"
+import { Tooltip } from "react-tooltip"
+import { NotificationButton } from "../NotificationCenter"
 
 interface DashboardLayoutProps {
   children: ReactNode
   title?: string
-  userRole?: string
-  userName?: string
-}
-
-// Tooltip компонент
-const Tooltip = ({
-  children,
-  text,
-  position = "right",
-}: { children: ReactNode; text: string; position?: "right" | "bottom" }) => {
-  if (!text) return <>{children}</>
-
-  // Различни стилове според позицията
-  const positionClasses = {
-    right: "left-[100%] ml-1 top-1/2 -translate-y-1/2",
-    bottom: "top-full mt-1 left-1/2 -translate-x-1/2",
-  }
-
-  // Различни стилове за стрелката според позицията
-  const arrowClasses = {
-    right:
-      "absolute top-1/2 -left-1 -translate-y-1/2 w-0 h-0 border-t-4 border-r-4 border-b-4 border-t-transparent border-r-gray-800 dark:border-r-gray-700 border-b-transparent",
-    bottom:
-      "absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-b-4 border-r-4 border-l-transparent border-b-gray-800 dark:border-b-gray-700 border-r-transparent",
-  }
-
-  return (
-    <div className="group relative inline-block w-full">
-      {children}
-      <div
-        className={`fixed z-[1000] invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-100 bg-gray-800 dark:bg-gray-700 text-white text-sm font-medium rounded-md px-2 py-1.5 ${positionClasses[position]} drop-shadow-lg pointer-events-none whitespace-nowrap`}
-      >
-        {text}
-        <div className={arrowClasses[position]}></div>
-      </div>
-    </div>
-  )
 }
 
 const DashboardLayout = ({
   children,
   title = "Табло",
-  userRole = "Потребител",
-  userName = "Потребител",
 }: DashboardLayoutProps) => {
   const navigate = useNavigate()
   const location = useLocation()
   const { darkMode, toggleDarkMode } = useContext(ThemeContext)
+  const { signOut, user } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(localStorage.getItem("sidebarOpen") === "false" ? false : true)
   const [isMobileView, setIsMobileView] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const profileMenuRef = useRef<HTMLDivElement>(null)
+
+  // Извличаме данни за потребителя
+  const userName = user?.profile?.full_name || user?.email || user?.user_metadata?.name || "Потребител"
+  const userRole = user?.profile?.role === "company" 
+    ? "Фирма" 
+    : user?.profile?.role === "technician" 
+    ? "Техник" 
+    : user?.profile?.role === "building_manager"
+    ? "Управител на сграда"
+    : user?.profile?.role || "Потребител"
+  
+  // Заглавие на дашборда с име на фирмата
+  const dashboardTitle = `${title} - ${user?.profile?.company_name || "Фирма"}`
 
   // Проверка на размера на екрана
   useEffect(() => {
@@ -81,21 +60,37 @@ const DashboardLayout = ({
     localStorage.setItem("sidebarOpen", isSidebarOpen.toString())
   }, [isSidebarOpen])
 
+  // Затваряне на профил менюто при клик извън него
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
   const handleSignOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-
-      notify.success("Успешно излизане от системата")
+      await signOut()
+      toast.success("Успешно излизане от системата")
       navigate("/login")
     } catch (error) {
       console.error("Грешка при излизане:", error)
-      notify.error("Грешка при излизане от системата")
+      toast.error("Грешка при излизане от системата")
     }
   }
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen)
+  }
+
+  const toggleProfileMenu = () => {
+    setIsProfileMenuOpen(!isProfileMenuOpen)
   }
 
   // Функция за проверка дали линкът е активен
@@ -106,12 +101,12 @@ const DashboardLayout = ({
   // Функция за генериране на CSS класове за навигационните линкове
   const getLinkClasses = (path: string) => {
     const baseClasses =
-      "flex items-center justify-center px-2 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 relative w-full"
+      "flex items-center px-2 py-2.5 text-sm font-medium rounded-lg transition-colors duration-200 relative w-full"
 
     let activeClasses = ""
     if (isActive(path)) {
       activeClasses =
-        "text-primary-700 bg-primary-50 dark:text-primary-100 dark:bg-primary-900/50 border-l-4 border-primary-500 dark:border-primary-400"
+        "text-primary-700 bg-primary-50 dark:text-primary-100 dark:bg-primary-900/50"
     } else {
       activeClasses =
         "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-white"
@@ -121,37 +116,89 @@ const DashboardLayout = ({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-x-hidden">
       {/* Навигационна лента */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-20">
+      <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-20 border-b border-gray-200 dark:border-gray-700">
         <div className="px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <Tooltip text={isSidebarOpen ? "Свий навигация" : "Разгъни навигация"} position="bottom">
-                <button
-                  onClick={toggleSidebar}
-                  className="p-2 rounded-md text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 focus:outline-none"
-                  aria-label="Отвори/затвори навигация"
-                >
+          <div className="flex items-center justify-between h-14">
+            <div className="flex items-center space-x-4">
+              <button
+                id="sidebar-toggle"
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800 shadow-md focus:outline-none transition-colors duration-200 flex items-center justify-center"
+                aria-label="Отвори/затвори навигация"
+                data-tooltip-content={isSidebarOpen ? "Свий навигация" : "Разгъни навигация"}
+                data-tooltip-place="bottom"
+              >
+                {isSidebarOpen ? (
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6"
+                    className="h-4 w-4"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
-                </button>
-              </Tooltip>
-              <div className="ml-4 font-medium text-lg">{title}</div>
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
+              </button>
+              <Tooltip 
+                anchorSelect="#sidebar-toggle" 
+                className="tooltip-custom" 
+                place="bottom" 
+                positionStrategy="fixed"
+                style={{ zIndex: 9999 }}
+              />
+              <div className="font-bold text-lg bg-gradient-to-r from-primary-600 to-blue-500 dark:from-primary-400 dark:to-blue-300 bg-clip-text text-transparent whitespace-nowrap">{dashboardTitle}</div>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
+              <div className="relative hidden sm:block">
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Търсене..." 
+                    className="bg-gray-100 dark:bg-gray-700 border-0 rounded-full pl-10 pr-4 py-1.5 text-sm w-44 lg:w-56 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 transition-all duration-200"
+                    id="search-input"
+                    data-tooltip-content="Търсене в системата"
+                    data-tooltip-place="bottom"
+                  />
+                  <Tooltip 
+                    anchorSelect="#search-input" 
+                    className="tooltip-custom" 
+                    place="bottom" 
+                    positionStrategy="fixed"
+                    style={{ zIndex: 9999 }}
+                  />
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className="h-4 w-4 absolute left-3.5 top-2 text-gray-400 dark:text-gray-500" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </div>
+              
               <button
                 onClick={toggleDarkMode}
-                className="p-2 rounded-lg text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 focus:outline-none transition-colors duration-200"
+                className="p-2 rounded-full text-gray-500 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 focus:outline-none transition-colors duration-200"
                 aria-label="Превключване на тема"
+                id="theme-toggle-btn"
+                data-tooltip-content={darkMode ? "Светла тема" : "Тъмна тема"}
+                data-tooltip-place="bottom"
               >
                 {darkMode ? (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -167,75 +214,102 @@ const DashboardLayout = ({
                   </svg>
                 )}
               </button>
+              <Tooltip 
+                anchorSelect="#theme-toggle-btn" 
+                className="tooltip-custom" 
+                place="bottom" 
+                positionStrategy="fixed"
+                style={{ zIndex: 9999 }}
+              />
 
-              <div className="relative">
-                <button className="flex items-center space-x-2 text-sm focus:outline-none p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+              {/* Заменяме статичния бутон с NotificationButton компонента */}
+              <NotificationButton />
+
+              <div className="border-l border-gray-200 dark:border-gray-700 h-8 mx-0.5"></div>
+
+              {/* Профил с dropdown меню */}
+              <div className="relative" ref={profileMenuRef}>
+                <button 
+                  onClick={toggleProfileMenu}
+                  className="flex items-center space-x-2 text-sm focus:outline-none p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+                  aria-expanded={isProfileMenuOpen}
+                  aria-haspopup="true"
+                >
                   <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-700 flex items-center justify-center">
                     <span className="font-medium text-primary-800 dark:text-primary-100">
-                      {userName.charAt(0).toUpperCase()}
+                      {userName?.charAt(0).toUpperCase() || 'П'}
                     </span>
                   </div>
-                  <div className="hidden md:block">
-                    <div className="text-sm font-medium">{userName}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{userRole}</div>
+                  <div className="hidden lg:block">
+                    <div className="text-sm font-medium truncate max-w-[120px]">{userName || 'Потребител'}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]">{userRole || 'Потребител'}</div>
                   </div>
+                  <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
                 </button>
+                
+                {/* Dropdown меню за профила */}
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                    <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                      <div className="text-sm font-medium">{userName}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{userRole}</div>
+                    </div>
+                    <div className="py-1">
+                      <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        Моят профил
+                      </Link>
+                      <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        Настройки
+                      </Link>
+                      <Link to="/security" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        Сигурност
+                      </Link>
+                      <Link to="/help" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        Помощ
+                      </Link>
+                    </div>
+                    <div className="py-1 border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        onClick={handleSignOut}
+                        className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        Излизане
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              <button
-                onClick={handleSignOut}
-                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-              >
-                Изход
-              </button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex overflow-x-hidden">
+      <div className="flex flex-grow min-h-0 relative">
         {/* Странична лента */}
         <aside
-          className={`fixed inset-y-0 pt-16 left-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out lg:static lg:h-screen z-10 overflow-hidden ${
+          className={`absolute md:relative top-0 left-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-all duration-300 ease-in-out h-auto min-h-full z-10 ${
             isMobileView ? (isSidebarOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"
           } ${isSidebarOpen ? "w-64" : "w-[60px]"}`}
         >
-          <div className="h-full flex flex-col overflow-y-auto overflow-x-hidden py-1 px-1">
-            <div className={`px-2 py-1 mb-1 ${isSidebarOpen ? "flex" : "flex justify-center"} items-center`}>
-              <Link to="/dashboard" className={`flex items-center ${isSidebarOpen ? "space-x-2" : ""}`}>
-                <div className="p-1 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-8 w-8 text-primary-600 dark:text-primary-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H4a1 1 0 001-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z" />
-                  </svg>
-                </div>
-                {isSidebarOpen && (
-                  <div className="text-base font-medium bg-gradient-to-r from-primary-600 to-blue-500 dark:from-primary-400 dark:to-blue-300 bg-clip-text text-transparent whitespace-nowrap">
-                    АП Дашборд
-                  </div>
-                )}
-              </Link>
-            </div>
-
-            <nav className="space-y-0.5 flex-1 overflow-x-hidden">
+          <div className="h-full flex flex-col overflow-y-auto">
+            <nav className="space-y-1 flex-1 overflow-x-hidden pt-2">
               {isSidebarOpen && (
-                <div className="px-3 py-0.5">
-                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    УПРАВЛЕНИЕ
-                  </h3>
+                <div className="px-3 py-2 mb-1">
+                  <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    Основно
+                  </span>
                 </div>
               )}
 
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Начало" : ""}>
-                  <Link to="/dashboard" className={getLinkClasses("/dashboard")}>
+              {/* Прилагаме Tooltip само когато страничната лента е свита */}
+              {isSidebarOpen ? (
+                <Link to="/dashboard" className={getLinkClasses("/dashboard")}>
+                  <div className="p-1.5 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 mr-3">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
+                      className="h-5 w-5"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -247,91 +321,52 @@ const DashboardLayout = ({
                         d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
                       />
                     </svg>
-                    {isSidebarOpen && <span>Начало</span>}
+                  </div>
+                  <span>Табло</span>
+                </Link>
+              ) : (
+                <div className="w-full">
+                  <Link 
+                    to="/dashboard" 
+                    className={getLinkClasses("/dashboard")} 
+                    id="dashboard-link"
+                    data-tooltip-content="Табло"
+                    data-tooltip-place="right"
+                  >
+                    <div className="p-1.5 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 mr-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                        />
+                      </svg>
+                    </div>
                   </Link>
-                </Tooltip>
-              </div>
-
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Асансьори" : ""}>
-                  <Link to="/dashboard/elevators" className={getLinkClasses("/dashboard/elevators")}>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                      />
-                    </svg>
-                    {isSidebarOpen && <span>Асансьори</span>}
-                  </Link>
-                </Tooltip>
-              </div>
-
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Поддръжка" : ""}>
-                  <Link to="/dashboard/maintenance" className={getLinkClasses("/dashboard/maintenance")}>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-                      />
-                    </svg>
-                    {isSidebarOpen && <span>Поддръжка</span>}
-                  </Link>
-                </Tooltip>
-              </div>
-
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Заявки" : ""}>
-                  <Link to="/dashboard/tickets" className={getLinkClasses("/dashboard/tickets")}>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                      />
-                    </svg>
-                    {isSidebarOpen && <span>Заявки</span>}
-                  </Link>
-                </Tooltip>
-              </div>
-
-              {isSidebarOpen && (
-                <div className="px-3 py-0.5 pt-2">
-                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    УЧАСТНИЦИ
-                  </h3>
+                  <Tooltip 
+                    anchorSelect="#dashboard-link" 
+                    className="tooltip-custom" 
+                    place="right"
+                    positionStrategy="fixed"
+                    style={{ zIndex: 9999 }}
+                    offset={20}
+                  />
                 </div>
               )}
 
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Техници" : ""}>
-                  <Link to="/dashboard/technicians" className={getLinkClasses("/dashboard/technicians")}>
+              {isSidebarOpen ? (
+                <Link to="/elevators" className={getLinkClasses("/elevators")}>
+                  <div className="p-1.5 rounded-md bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 mr-3">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
+                      className="h-5 w-5"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -340,146 +375,126 @@ const DashboardLayout = ({
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                        d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
                       />
                     </svg>
-                    {isSidebarOpen && <span>Техници</span>}
+                  </div>
+                  <span>Асансьори</span>
+                </Link>
+              ) : (
+                <div className="w-full">
+                  <Link 
+                    to="/elevators" 
+                    className={getLinkClasses("/elevators")} 
+                    id="elevators-link"
+                    data-tooltip-content="Асансьори"
+                    data-tooltip-place="right"
+                  >
+                    <div className="p-1.5 rounded-md bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 mr-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
                   </Link>
-                </Tooltip>
-              </div>
-
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Клиенти" : ""}>
-                  <Link to="/dashboard/customers" className={getLinkClasses("/dashboard/customers")}>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                      />
-                    </svg>
-                    {isSidebarOpen && <span>Клиенти</span>}
-                  </Link>
-                </Tooltip>
-              </div>
-
-              {isSidebarOpen && (
-                <div className="px-3 py-0.5 pt-2">
-                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    ФИНАНСИ
-                  </h3>
+                  <Tooltip 
+                    anchorSelect="#elevators-link" 
+                    className="tooltip-custom" 
+                    place="right"
+                    positionStrategy="fixed"
+                    style={{ zIndex: 9999 }}
+                    offset={20}
+                  />
                 </div>
               )}
 
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Фактури" : ""}>
-                  <Link to="/dashboard/invoices" className={getLinkClasses("/dashboard/invoices")}>
+              {isSidebarOpen ? (
+                <Link to="/maintenance" className={getLinkClasses("/maintenance")}>
+                  <div className="p-1.5 rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 mr-3">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
+                      className="h-5 w-5"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
+                      strokeWidth={2}
                     >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                      />
-                    </svg>
-                    {isSidebarOpen && <span>Фактури</span>}
-                  </Link>
-                </Tooltip>
-              </div>
-
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Отчети" : ""}>
-                  <Link to="/dashboard/reports" className={getLinkClasses("/dashboard/reports")}>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                      />
-                    </svg>
-                    {isSidebarOpen && <span>Отчети</span>}
-                  </Link>
-                </Tooltip>
-              </div>
-            </nav>
-
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
-              <div className="flex flex-col space-y-1">
-                <Tooltip text={!isSidebarOpen ? "Настройки" : ""}>
-                  <Link to="/dashboard/settings" className={getLinkClasses("/dashboard/settings")}>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
                         d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                       />
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeWidth={2}
                         d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                       />
                     </svg>
-                    {isSidebarOpen && <span>Настройки</span>}
-                  </Link>
-                </Tooltip>
-
-                <Tooltip text={!isSidebarOpen ? "Изход" : ""}>
-                  <button
-                    onClick={handleSignOut}
-                    className={`w-full text-left flex items-center px-2 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-white transition-colors duration-200 ${isSidebarOpen ? "" : "justify-center"}`}
+                  </div>
+                  <span>Поддръжка</span>
+                </Link>
+              ) : (
+                <div className="w-full">
+                  <Link 
+                    to="/maintenance" 
+                    className={getLinkClasses("/maintenance")} 
+                    id="maintenance-link"
+                    data-tooltip-content="Поддръжка"
+                    data-tooltip-place="right"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`${isSidebarOpen ? "mr-3" : "mx-auto"} h-6 w-6`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                    <div className="p-1.5 rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 mr-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
                         strokeWidth={2}
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                      />
-                    </svg>
-                    {isSidebarOpen && <span>Изход</span>}
-                  </button>
-                </Tooltip>
-              </div>
-            </div>
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                    </div>
+                  </Link>
+                  <Tooltip 
+                    anchorSelect="#maintenance-link" 
+                    className="tooltip-custom" 
+                    place="right"
+                    positionStrategy="fixed"
+                    style={{ zIndex: 9999 }}
+                    offset={20}
+                  />
+                </div>
+              )}
+            </nav>
           </div>
         </aside>
 
-        {/* Основно съдържание */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">{children}</main>
+        {/* Основен контейнер */}
+        <main className="flex-1 p-4 md:p-6 overflow-auto w-full">
+          {/* Съдържание на страницата */}
+          <div className="w-full mb-8">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ import { supabase } from '../supabaseClient';
 import { registerSchema, type RegisterFormData } from '../schemas/registerSchema';
 import { notify } from './Notifications';
 import { z } from 'zod';
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 
 // Използваме същия тип, който е дефиниран в схемата
 type RoleType = z.infer<typeof registerSchema>['role'];
@@ -135,18 +135,24 @@ const Register = () => {
       if (authData.user) {
         const roleSpecificData = getRoleSpecificData(data);
         
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: authData.user.id,
-            email: data.email,
-            full_name: data.fullName,
-            phone: data.phone,
-            role: dbRole, // Използваме преобразуваната роля
-            ...roleSpecificData,
-          });
+        // Използваме RPC функция вместо директна заявка
+        const { data: profileResult, error: profileError } = await supabase
+          .rpc('create_profile', { 
+            user_id: authData.user.id,
+            profile_data: {
+              email: data.email,
+              full_name: data.fullName,
+              phone: data.phone,
+              role: dbRole, // Използваме преобразуваната роля
+              ...roleSpecificData,
+            }
+          })
 
         if (profileError) throw profileError;
+        
+        if (!profileResult.success) {
+          throw new Error(profileResult.message || 'Възникна проблем при създаването на профила')
+        }
       }
 
       // Директно навигиране със state параметър, за да укажем, че идваме от регистрация

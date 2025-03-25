@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect, useContext } from 'react';
-import { ThemeContext, useAuth } from '../App';
+import { ThemeContext } from '../App';
+import { useAuth } from '../context/AuthContext';
 
 const Home = () => {
   const [isScrolled, setIsScrolled] = useState(false);

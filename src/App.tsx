@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import React, { useEffect, useState, createContext, useCallback } from 'react'
 import 'react-toastify/dist/ReactToastify.css'
 import Home from './components/Home'
@@ -8,10 +8,18 @@ import EmailVerification from './components/EmailVerification'
 import ForgotPassword from './components/ForgotPassword'
 import ResetPassword from './components/ResetPassword'
 import ResendVerification from './components/ResendVerification'
-import Notifications from './components/Notifications'
 import CompanyDashboard from './components/dashboard/CompanyDashboard'
+import ElevatorList from './components/dashboard/ElevatorList'
+import MaintenanceDashboard from './components/dashboard/MaintenanceDashboard'
 import NotFound from './components/NotFound'
-import { supabase } from './supabaseClient'
+import DashboardLayout from './components/layouts/DashboardLayout'
+import { useAuth as importedUseAuth } from './context/AuthContext'
+import Notifications from './components/Notifications'
+import Profile from './components/Profile'
+import Settings from './components/Settings'
+import Security from './components/Security'
+import NotificationsProvider from './components/NotificationsManager'
+import ToastContainer from './components/Notifications'
 
 // Тип за контекста на темата с разширени функционалности
 type ThemeContextType = {
@@ -21,28 +29,12 @@ type ThemeContextType = {
   isDarkThemeActive: () => boolean
 }
 
-// Тип за контекста за автентикацията
-type AuthContextType = {
-  session: any | null
-  user: any | null
-  loading: boolean
-  signOut: () => Promise<void>
-}
-
 // Създаваме контекст с подразбиращи се стойности
 export const ThemeContext = createContext<ThemeContextType>({
   darkMode: false,
   toggleDarkMode: () => {},
   setDarkMode: () => {},
   isDarkThemeActive: () => false,
-})
-
-// Създаваме контекст за автентикацията
-export const AuthContext = createContext<AuthContextType>({
-  session: null,
-  user: null,
-  loading: true,
-  signOut: async () => {},
 })
 
 // Функция за проверка на тъмната тема от localStorage и системните предпочитания
@@ -57,36 +49,34 @@ export const isDarkThemeActive = (): boolean => {
 
 // Компонент за защитен маршрут
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { session, loading } = useAuth();
+  const { session, loading } = importedUseAuth();
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   
-  if (loading) {
+  // Използваме useEffect за да отбележим първоначалното зареждане
+  useEffect(() => {
+    if (!loading) {
+      setInitialLoadComplete(true);
+    }
+  }, [loading]);
+  
+  // Показваме зареждаща индикация само при първоначално зареждане
+  if (loading && !initialLoadComplete) {
     return <div className="flex justify-center items-center min-h-screen">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
     </div>;
   }
   
-  if (!session) {
+  // Пренасочваме само ако сме сигурни, че няма сесия след пълно зареждане
+  if (initialLoadComplete && !session) {
     return <Navigate to="/login" replace />;
   }
   
   return <>{children}</>;
 };
 
-// Хук за използване на контекста за автентикация
-export const useAuth = () => {
-  const context = React.useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth трябва да се използва в AuthProvider');
-  }
-  return context;
-};
-
 // Главен компонент на приложението
 const App = () => {
   const [darkMode, setDarkModeState] = useState(false)
-  const [session, setSession] = useState<any>(null)
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
   
   // Функция за актуализиране на тъмния режим с пълна синхронизация
   const applyDarkMode = useCallback((isDark: boolean) => {
@@ -106,8 +96,7 @@ const App = () => {
     localStorage.setItem('theme', isDark ? 'dark' : 'light')
     
     // Изпращаме персонализирано събитие за другите компоненти
-    const event = new CustomEvent('themeChange', { detail: { isDark } })
-    window.dispatchEvent(event)
+    window.dispatchEvent(new CustomEvent('themeChange', { detail: { isDark } }))
   }, [])
   
   // Функция за превключване на тъмния режим
@@ -138,94 +127,51 @@ const App = () => {
     }
   }, [applyDarkMode])
   
-  // Функция за изход от системата
-  const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      setSession(null);
-      setUser(null);
-    } catch (error) {
-      console.error('Грешка при излизане:', error);
-    }
-  };
-  
-  // Проверяваме автентикацията при зареждане на приложението
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        setSession(currentSession);
-        
-        if (currentSession?.user) {
-          setUser(currentSession.user);
-        }
-        
-        // Слушаме за промени в автентикацията
-        const { data: authListener } = supabase.auth.onAuthStateChange(
-          async (event, newSession) => {
-            setSession(newSession);
-            setUser(newSession?.user ?? null);
-          }
-        );
-        
-        return () => {
-          authListener?.subscription.unsubscribe();
-        };
-      } catch (error) {
-        console.error('Грешка при проверка на автентикацията:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    checkAuth();
-  }, []);
-  
   // Създаваме обект с всички функции и стойности за контекста
-  const themeContextValue = {
+  const themeContextValue = React.useMemo(() => ({
     darkMode,
     toggleDarkMode,
     setDarkMode: applyDarkMode,
     isDarkThemeActive: () => darkMode,
-  }
-  
-  // Създаваме обект с всички стойности за контекста за автентикация
-  const authContextValue = {
-    session,
-    user,
-    loading,
-    signOut,
-  }
+  }), [darkMode, toggleDarkMode, applyDarkMode]);
   
   return (
     <ThemeContext.Provider value={themeContextValue}>
-      <AuthContext.Provider value={authContextValue}>
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/10 to-indigo-50/20 dark:from-gray-900 dark:via-blue-950/10 dark:to-indigo-950/20 transition-colors duration-300">
-          <Router>
-            <Notifications />
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/register/:role" element={<Register />} />
-              <Route path="/email-verification" element={<EmailVerification />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/resend-verification" element={<ResendVerification />} />
-              
-              {/* Защитени маршрути */}
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <CompanyDashboard />
-                </ProtectedRoute>
-              } />
-              
-              {/* 404 страница */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Router>
-        </div>
-      </AuthContext.Provider>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/10 to-indigo-50/20 dark:from-gray-900 dark:via-blue-950/10 dark:to-indigo-950/20 transition-colors duration-300">
+        <NotificationsProvider>
+          <Notifications />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/register/:role" element={<Register />} />
+            <Route path="/email-verification" element={<EmailVerification />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/resend-verification" element={<ResendVerification />} />
+            
+            {/* Защитени маршрути */}
+            <Route element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <Outlet />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }>
+              <Route path="/dashboard" element={<CompanyDashboard />} />
+              <Route path="/elevators" element={<ElevatorList />} />
+              <Route path="/maintenance" element={<MaintenanceDashboard />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/security" element={<Security />} />
+            </Route>
+            
+            {/* Маршрут за грешка 404 */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+          <ToastContainer />
+        </NotificationsProvider>
+      </div>
     </ThemeContext.Provider>
   )
 }

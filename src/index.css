@@ -15,6 +15,17 @@
   --color-warning: 245 158 11;
   --color-info: 59 130 246;
   --color-shadow: 15 23 42;
+  
+  /* React Tooltip променливи */
+  --rt-color-white: 255 255 255;
+  --rt-color-dark: 31 41 55;
+  --rt-color-success: var(--color-success);
+  --rt-color-error: var(--color-error);
+  --rt-color-warning: var(--color-warning);
+  --rt-color-info: var(--color-info);
+  --rt-opacity: 0.95 !important;
+  --rt-transition-show-delay: 0.15s;
+  --rt-transition-closing-delay: 0.15s;
 }
 
 .dark {
@@ -29,6 +40,10 @@
   --color-warning: 217 119 6;
   --color-info: 37 99 235;
   --color-shadow: 0 0 0;
+  
+  /* React Tooltip променливи за тъмен режим */
+  --rt-color-white: 17 24 39;
+  --rt-color-dark: 243 244 246;
 }
 
 html, body {
@@ -46,6 +61,34 @@ html.dark, body.dark-theme {
   transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 300ms;
+}
+
+/* Персонализирани стилове за React Tooltip */
+.tooltip-custom {
+  border-radius: 0.5rem !important;
+  font-size: 0.75rem !important;
+  padding: 0.5rem 0.75rem !important;
+  border: 1px solid rgba(var(--color-border), 0.3) !important;
+  box-shadow: 0 4px 6px -1px rgba(var(--color-shadow), 0.1), 0 2px 4px -1px rgba(var(--color-shadow), 0.06) !important;
+  max-width: 220px !important;
+  z-index: 999 !important;
+  background-color: rgb(15, 23, 42) !important;
+  color: rgb(255, 255, 255) !important;
+}
+
+/* Премахваме персонализираните стилове за тъмен режим, за да имаме единен черен tooltip */
+.dark .tooltip-custom {
+  border: 1px solid rgba(var(--color-border), 0.4) !important;
+}
+
+/* Общи настройки за opacity на tooltip-ите */
+:root {
+  --rt-opacity: 0.95 !important;
+}
+
+/* За стрелката на tooltip-ите - винаги черна */
+.tooltip-custom::after {
+  background-color: rgb(15, 23, 42) !important;
 }
 
 @layer components {

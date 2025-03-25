@@ -44,43 +44,78 @@ export type Database = {
           building_address?: string | null
         }
       }
-      elevators: {
+      buildings: {
         Row: {
           id: string
           name: string
           address: string
-          status: 'working' | 'maintenance' | 'disabled'
-          last_inspection_date: string | null
-          notes: string | null
-          company_id: string
-          technician_id: string | null
-          building_manager_id: string | null
+          floors: number
+          entrances: number
           created_at: string
           updated_at: string
+          company_id: string
         }
         Insert: {
           id?: string
           name: string
           address: string
-          status?: 'working' | 'maintenance' | 'disabled'
-          last_inspection_date?: string | null
-          notes?: string | null
-          company_id: string
-          technician_id?: string | null
-          building_manager_id?: string | null
+          floors: number
+          entrances: number
           created_at?: string
           updated_at?: string
+          company_id: string
         }
         Update: {
           id?: string
           name?: string
           address?: string
-          status?: 'working' | 'maintenance' | 'disabled'
-          last_inspection_date?: string | null
-          notes?: string | null
+          floors?: number
+          entrances?: number
+          created_at?: string
+          updated_at?: string
           company_id?: string
-          technician_id?: string | null
-          building_manager_id?: string | null
+        }
+      }
+      elevators: {
+        Row: {
+          id: string
+          building_id: string
+          company_id: string
+          serial_number: string
+          model: string
+          capacity: number
+          installation_date: string | null
+          last_inspection_date: string | null
+          next_inspection_date: string | null
+          status: 'operational' | 'maintenance' | 'out_of_order'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          building_id: string
+          company_id: string
+          serial_number: string
+          model: string
+          capacity: number
+          installation_date?: string | null
+          last_inspection_date?: string | null
+          next_inspection_date?: string | null
+          status?: 'operational' | 'maintenance' | 'out_of_order'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          building_id?: string
+          company_id?: string
+          serial_number?: string
+          model?: string
+          capacity?: number
+          installation_date?: string | null
+          last_inspection_date?: string | null
+          next_inspection_date?: string | null
+          status?: 'operational' | 'maintenance' | 'out_of_order'
           created_at?: string
           updated_at?: string
         }
@@ -174,6 +209,50 @@ export type Database = {
           due_date?: string
           status?: 'paid' | 'pending' | 'overdue'
           payment_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      elevator_parts: {
+        Row: {
+          id: string
+          elevator_id: string
+          name: string
+          part_number: string | null
+          manufacturer: string | null
+          installation_date: string | null
+          last_maintenance_date: string | null
+          next_maintenance_date: string | null
+          status: string
+          description: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          elevator_id: string
+          name: string
+          part_number?: string | null
+          manufacturer?: string | null
+          installation_date?: string | null
+          last_maintenance_date?: string | null
+          next_maintenance_date?: string | null
+          status?: string
+          description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          elevator_id?: string
+          name?: string
+          part_number?: string | null
+          manufacturer?: string | null
+          installation_date?: string | null
+          last_maintenance_date?: string | null
+          next_maintenance_date?: string | null
+          status?: string
+          description?: string | null
           created_at?: string
           updated_at?: string
         }

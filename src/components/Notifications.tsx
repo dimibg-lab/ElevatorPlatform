@@ -3,6 +3,30 @@ import { ToastContainer, toast, ToastOptions, cssTransition } from 'react-toasti
 import 'react-toastify/dist/ReactToastify.css';
 import { ThemeContext, isDarkThemeActive } from '../App';
 
+/**
+ * Система за Toast нотификации (временни съобщения)
+ * 
+ * ВАЖНО: Този компонент управлява САМО временните toast съобщения и е напълно 
+ * отделен от постоянните нотификации, които се показват в дропдаун меню (NotificationCenter.tsx).
+ * 
+ * Характеристики на toast нотификациите в този файл:
+ * - Временни: появяват се и изчезват автоматично след няколко секунди
+ * - Не се съхраняват в база данни, а са само визуални индикатори
+ * - Използват се за бърза обратна връзка след действия (успех, грешка, предупреждение)
+ * - Имплементирани чрез библиотеката react-toastify
+ * 
+ * За постоянните нотификации, които изискват действие от потребителя,
+ * използвайте NotificationCenter.tsx.
+ * 
+ * За работа и с двата вида нотификации, използвайте NotificationsManager.tsx,
+ * който предоставя унифициран интерфейс за всички видове известия.
+ * 
+ * Връзка между компонентите:
+ * - Notifications.tsx (този файл): Временни toast съобщения с react-toastify
+ * - NotificationCenter.tsx: Постоянни нотификации в дропдаун меню от базата данни
+ * - NotificationsManager.tsx: Обединява двете системи с единен API
+ */
+
 // Типове
 type NotificationType = 'success' | 'error' | 'info' | 'warning';
 type ToastId = string | number;
@@ -149,7 +173,7 @@ const getDefaultOptions = (type: NotificationType, isDarkMode: boolean): ToastOp
     ),
     role: type === 'info' ? 'status' : 'alert',
     transition: toastAnimation,
-    toastId: `${type}-${Date.now()}`,
+    toastId: `${type}-${Date.now()}`
   };
 };
 
@@ -287,12 +311,80 @@ export const notifyWithTitle = {
   }
 };
 
+// Допълнителни стилове за позициониране на нотификациите
+const notificationsStyles = `
+  .Toastify__toast-container--top-right {
+    top: 1rem;
+    right: 1rem;
+    width: auto;
+    max-width: 500px;
+    padding: 0;
+    z-index: 9999;
+  }
+  
+  .Toastify__toast {
+    padding: 12px 16px;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    position: relative;
+    min-height: 0;
+    justify-content: space-between;
+  }
+  
+  .Toastify__toast-body {
+    flex: 1;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+  }
+  
+  .Toastify__toast-icon {
+    margin-right: 10px;
+    width: 20px;
+    flex-shrink: 0;
+  }
+  
+  /* Коригиране на позицията на бутона за затваряне */
+  .Toastify__close-button {
+    position: relative !important;
+    right: auto !important;
+    top: auto !important;
+    opacity: 0.7;
+    padding: 0;
+    margin-left: 10px !important;
+    align-self: center;
+  }
+  
+  .Toastify__close-button:hover {
+    opacity: 1;
+  }
+  
+  .success-toast .Toastify__close-button {
+    color: var(--toastify-color-success);
+  }
+  
+  .error-toast .Toastify__close-button {
+    color: var(--toastify-color-error);
+  }
+  
+  .info-toast .Toastify__close-button {
+    color: var(--toastify-color-info);
+  }
+  
+  .warning-toast .Toastify__close-button {
+    color: var(--toastify-color-warning);
+  }
+`;
+
 // Функция за инжектиране на глобални стилове
 const injectGlobalStyles = () => {
   if (typeof window !== 'undefined' && !document.getElementById('toast-custom-styles')) {
     const style = document.createElement('style');
     style.id = 'toast-custom-styles';
     style.innerHTML = `
+      ${notificationsStyles}
       .Toastify__toast-container {
         width: auto;
         max-width: 400px;
@@ -565,7 +657,7 @@ const Notifications: React.FC = () => {
   }, []);
   
   // Определяне на позицията според размера на екрана
-  const [position, setPosition] = React.useState(() => {
+  const [, setPosition] = React.useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth <= 480 ? 'bottom-center' : 'top-right';
     }
@@ -584,7 +676,7 @@ const Notifications: React.FC = () => {
   
   return (
     <ToastContainer
-      position={position as any}
+      position="top-right"
       autoClose={2000}
       hideProgressBar={true}
       newestOnTop
@@ -606,7 +698,7 @@ const Notifications: React.FC = () => {
       closeButton={({ closeToast }) => (
         <button
           onClick={closeToast}
-          className={`ml-2 -mr-1 p-1.5 rounded-full ${darkMode ? 'hover:bg-white/10' : 'hover:bg-black/10'} transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-70 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-current`}
+          className={`flex items-center justify-center p-1.5 rounded-full opacity-70 hover:opacity-100 focus:outline-none ${darkMode ? 'text-gray-300 hover:bg-white/10' : 'text-gray-600 hover:bg-black/10'}`}
           aria-label="Затвори нотификацията"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
